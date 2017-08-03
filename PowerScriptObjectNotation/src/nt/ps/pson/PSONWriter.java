@@ -9,7 +9,7 @@ package nt.ps.pson;
  *
  * @author Asus
  */
-public class PSONWriter
+public final class PSONWriter
 {
     
 }
