@@ -72,4 +72,21 @@ public final class PSON
     {
         try(FileOutputStream fos = new FileOutputStream(file)) { write(object, wrapped, fos, DEFAULT_BUFFER_LENGTH); }
     }
+    
+    
+    
+    public static final <T extends PSONUserdataReader> T read(T object, InputStream input, int bufferLength) throws IOException, PSONException
+    {
+        return new PSONReader(input, bufferLength).readUserdata(object);
+    }
+    public static final <T extends PSONUserdataReader> T read(T object, InputStream input) throws IOException, PSONException { return read(object, input, DEFAULT_BUFFER_LENGTH); }
+    
+    public static final <T extends PSONUserdataReader> T read(Class<T> objectClass, InputStream input, int bufferLength) throws IllegalStateException, IOException, PSONException
+    {
+        return new PSONReader(input, bufferLength).readUserdata(objectClass);
+    }
+    public static final <T extends PSONUserdataReader> T read(Class<T> objectClass, InputStream input) throws IllegalStateException, IOException, PSONException
+    {
+        return read(objectClass, input, DEFAULT_BUFFER_LENGTH);
+    }
 }

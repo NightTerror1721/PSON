@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Objects;
 import nt.ps.compiler.LangUtils.ProtoObject;
@@ -308,6 +310,39 @@ public final class PSONReader implements AutoCloseable
         return first == OPEN_OBJECT
                 ? readObject(CLOSE_OBJECT, false)
                 : readObject(EOF, true);
+    }
+    
+    public final <T extends PSONUserdataReader> T readUserdata(T object) throws IOException, PSONException
+    {
+        boolean useLastChar = readIgnoreSpaces() != OPEN_OBJECT;
+        char endChar = useLastChar ? CLOSE_OBJECT : EOF;
+        int count = 0;
+        for(;;)
+        {
+            String name = readPropertyName(count++ == 0 && useLastChar);
+            seek(true, NAME_VALUE_SEPARATOR);
+            PSValue value = readPropertyValue();
+            object.readPSONProperty(name, value);
+            char end = seek(true, PROPERTY_SEPARATOR, endChar);
+            if(end == endChar)
+                return object;
+        }
+    }
+    
+    public final <T extends PSONUserdataReader> T readUserdata(Class<T> objectClass) throws IllegalStateException, IOException, PSONException
+    {
+        try
+        {
+            Constructor<T> cns = objectClass.getDeclaredConstructor();
+            T instance = cns.newInstance();
+            return readUserdata(instance);
+        }
+        catch(IOException | IllegalAccessException | IllegalArgumentException |
+                InstantiationException | NoSuchMethodException | SecurityException |
+                InvocationTargetException | PSONException ex)
+        {
+            throw new IllegalStateException(ex);
+        }
     }
 
     @Override

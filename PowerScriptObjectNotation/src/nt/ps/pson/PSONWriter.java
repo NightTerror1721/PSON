@@ -13,6 +13,7 @@ import java.io.Writer;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import nt.ps.exception.PSRuntimeException;
 import nt.ps.lang.PSObject;
@@ -85,7 +86,7 @@ public final class PSONWriter implements AutoCloseable
         int len = map.size(), count = 0;
         for(Map.Entry<PSValue, PSValue> e : map.entrySet())
         {
-            output.write(newIdentation + "\"" + e.getKey().toJavaString() + "\": ");
+            output.write(newIdentation + e.getKey().toJavaString() + ": ");
             writeValue(newIdentation, e.getValue());
             output.append(++count < len ? ",\n" : "\n");
         }
@@ -95,8 +96,14 @@ public final class PSONWriter implements AutoCloseable
     private static String propertyName(String name)
     {
         return ID_PATTERN.matcher(name).matches()
-                ? name
-                : "\"" + name + "\"";
+                ? replaceScapeChars(name)
+                : "\"" + replaceScapeChars(name) + "\"";
+    }
+    
+    private static String replaceScapeChars(String name)
+    {
+        return name.replace("\t", "\\t").replace("\r", "\\r").replace("\n", "\\n")
+                .replace("\u0000", "\\0").replace("\\", "\\\\").replace("\"", "\\\"").replace("\'", "\\\'");
     }
     
     private void writeObject(String identation, PSObject object, boolean wrapped) throws IOException
@@ -121,6 +128,23 @@ public final class PSONWriter implements AutoCloseable
     
     public final void writeObject(PSObject object, boolean wrapped) throws IOException { writeObject("", object, wrapped); }
     
+    private void writeUserdata(String identation, PSONUserdataWriter object, boolean wrapped) throws IOException
+    {
+        String newIdentation;
+        if(wrapped)
+        {
+            newIdentation = identation + "    ";
+            output.write("{\n");
+        }
+        else newIdentation = identation;
+        WriterOperations wops = new WriterOperations(newIdentation);
+        object.writePSONProperties(wops);
+        if(wrapped)
+            output.write(identation + "}");
+    }
+    
+    public final void writeUserdata(PSONUserdataWriter object, boolean wrapped) throws IOException { writeUserdata("", object, wrapped); }
+    
     public final void flush() throws IOException
     {
         output.flush();
@@ -130,5 +154,77 @@ public final class PSONWriter implements AutoCloseable
     public final void close() throws IOException
     {
         output.close();
+    }
+    
+    public final class WriterOperations
+    {
+        private int count = 0;
+        private final String identation;
+        
+        private WriterOperations(String identation) { this.identation = identation; }
+        
+        public final void write(String name, PSValue value) throws IOException
+        {
+            if(count++ > 0)
+                output.write(",\n" + identation);
+            output.write(propertyName(name) + ": ");
+            writeValue(identation, value);
+        }
+        
+        public final void write(String name, byte value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, short value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, int value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, long value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, float value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, double value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, boolean value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, char value) throws IOException { write(name, PSValue.valueOf(value)); }
+        
+        public final void write(String name, Byte value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Short value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Integer value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Long value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Float value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Double value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Boolean value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Character value) throws IOException { write(name, PSValue.valueOf(value)); }
+        
+        public final void write(String name, String value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, List<? extends PSValue> value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Map<PSValue, PSValue> value) throws IOException { write(name, PSValue.valueOf(value)); }
+        
+        public final void write(String name, byte... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, short... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, int... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, long... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, float... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, double... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, boolean... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, char... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        
+        public final void write(String name, Byte... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Short... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Integer... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Long... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Float... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Double... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Boolean... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Character... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, String... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, PSValue... value) throws IOException { write(name, PSValue.valueOf(value)); }
+        
+        public final <T> void write(String name, List<T> value, Function<? super T, PSValue> caster) throws IOException { write(name, PSValue.valueOf(value, caster)); }
+        public final <K, V> void write(String name, Map<K, V> value, Function<? super K, PSValue> keyCaster, Function<? super V, PSValue> valueCaster) throws IOException
+        {
+            write(name, PSValue.valueOf(value, keyCaster, valueCaster));
+        }
+        
+        public final void write(String name, PSONUserdataWriter userdata) throws IOException
+        {
+            if(count++ > 0)
+                output.write(",\n" + identation);
+            output.write(propertyName(name) + ": ");
+            writeUserdata(identation, userdata, true);
+        }
     }
 }
