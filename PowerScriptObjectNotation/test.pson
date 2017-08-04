@@ -1,0 +1,16 @@
+name: "no-name",
+properties: {
+	ids: [50, 45, 35],
+	doms: [
+		{
+			dash: true,
+			power: 50
+		}, {
+			dash: false,
+			power: 65
+		},
+		undefined
+	],
+	"self owner": dragonite
+},
+"eliminated": 65.4f

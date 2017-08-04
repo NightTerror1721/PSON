@@ -1,0 +1,14 @@
+marc_test: [5, 10, 65, 145],
+eliminated: 65.4,
+name: "no-name",
+properties: {
+    "self owner": "dragonite",
+    ids: [50, 45, 35],
+    doms: [{
+        power: 50,
+        dash: true
+    }, {
+        power: 65,
+        dash: false
+    }, undefined]
+}

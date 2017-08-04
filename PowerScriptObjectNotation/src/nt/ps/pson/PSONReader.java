@@ -9,8 +9,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.util.ArrayList;
 import java.util.Objects;
 import nt.ps.compiler.LangUtils.ProtoObject;
+import nt.ps.compiler.parser.Literal;
+import nt.ps.lang.PSArray;
+import nt.ps.lang.PSNumber.PSDouble;
+import nt.ps.lang.PSNumber.PSLong;
 import nt.ps.lang.PSObject;
 import nt.ps.lang.PSString;
 import nt.ps.lang.PSValue;
@@ -22,10 +27,11 @@ import nt.ps.lang.PSValue;
 public final class PSONReader implements AutoCloseable
 {
     private final Reader source;
-    private char[] buffer;
+    private final char[] buffer;
     private int index;
     private int max;
     private int line;
+    private char lastChar = EOF;
     
     private static final char EOF = Character.MAX_VALUE;
     private static final char EOL = '\n';
@@ -35,9 +41,13 @@ public final class PSONReader implements AutoCloseable
     private static final char CLOSE_OBJECT = '}';
     private static final char STRING_DELIMITER_A = '\'';
     private static final char STRING_DELIMITER_B = '\"';
+    private static final char OPEN_ARRAY = '[';
+    private static final char CLOSE_ARRAY = ']';
     
     public PSONReader(InputStream is, int bufferLen)
     {
+        if(bufferLen < 1)
+            throw new IllegalArgumentException("bufferLen cannot be less than 1");
         source = new InputStreamReader(is);
         buffer = new char[bufferLen];
         max = index = 0;
@@ -45,6 +55,8 @@ public final class PSONReader implements AutoCloseable
     
     public PSONReader(Reader reader, int bufferLen)
     {
+        if(bufferLen < 1)
+            throw new IllegalArgumentException("bufferLen cannot be less than 1");
         source = Objects.requireNonNull(reader);
         buffer = new char[bufferLen];
         max = index = 0;
@@ -58,7 +70,7 @@ public final class PSONReader implements AutoCloseable
             {
                 max = source.read(buffer, 0, buffer.length);
                 if(max <= 0)
-                    return EOF;
+                    return lastChar = EOF;
                 index = 0;
             }
             char c = buffer[index++];
@@ -67,14 +79,16 @@ public final class PSONReader implements AutoCloseable
                 case '\r': break;
                 case EOL:
                     line++;
-                default: return c;
+                default: return lastChar = c;
             }
         }
     }
     
-    private char seek(char character) throws IOException, PSONException
+    private char seek(boolean checkLastChar, char character) throws IOException, PSONException
     {
         int currentLine = line;
+        if(checkLastChar && lastChar == character)
+            return lastChar;
         for(char c = read();; c = read())
         {
             if(c == character)
@@ -84,14 +98,15 @@ public final class PSONReader implements AutoCloseable
         }
     }
     
-    private char seek(char... characters) throws IOException, PSONException
+    private char seek(boolean checkLastChar, char character0, char character1) throws IOException, PSONException
     {
         int currentLine = line;
+        if(checkLastChar && (lastChar == character0 || lastChar == character1))
+            return lastChar;
         for(char c = read();; c = read())
         {
-            for(char character : characters)
-                if(c == character)
-                    return c;
+            if(c == character0 || c == character1)
+                return c;
             if(c == EOF)
                 throw new PSONException("Unexpected End of File", currentLine);
         }
@@ -145,10 +160,10 @@ public final class PSONReader implements AutoCloseable
         throw new PSONException("Unexpected End of File", currentLine);
     }
     
-    public final String readPropertyName() throws IOException, PSONException
+    private String readPropertyName(boolean useLastChar) throws IOException, PSONException
     {
         int currentLine = line;
-        char c = readIgnoreSpaces();
+        char c = useLastChar ? lastChar : readIgnoreSpaces();
         switch(c)
         {
             case EOF: throw new PSONException("Unexpected End of File", currentLine);
@@ -162,6 +177,12 @@ public final class PSONReader implements AutoCloseable
                 //seek(NAME_VALUE_SEPARATOR);
                 return name;
             }
+            case NAME_VALUE_SEPARATOR:
+            case OPEN_OBJECT:
+            case CLOSE_OBJECT:
+            case OPEN_ARRAY:
+            case CLOSE_ARRAY:
+            case PROPERTY_SEPARATOR:
             default: {
                 StringBuilder sb = new StringBuilder(16);
                 sb.append(c);
@@ -178,6 +199,8 @@ public final class PSONReader implements AutoCloseable
                         case NAME_VALUE_SEPARATOR: return sb.toString();
                         case OPEN_OBJECT:
                         case CLOSE_OBJECT:
+                        case OPEN_ARRAY:
+                        case CLOSE_ARRAY:
                         case PROPERTY_SEPARATOR:
                             throw new PSONException("Invalid name Character: " + c, currentLine);
                         default: sb.append(c);
@@ -187,37 +210,108 @@ public final class PSONReader implements AutoCloseable
         }
     }
     
-    public final PSValue readPropertyValue() throws IOException, PSONException
+    private PSValue readPropertyValue() throws IOException, PSONException
     {
+        int currentLine = line;
         char c = readIgnoreSpaces();
         switch(c)
         {
-            case OPEN_OBJECT: return readObject(CLOSE_OBJECT);
+            case OPEN_OBJECT: return readObject(CLOSE_OBJECT, false);
+            case OPEN_ARRAY: return readArray();
             case STRING_DELIMITER_A: return new PSString(readStringLiteral(STRING_DELIMITER_A));
             case STRING_DELIMITER_B: return new PSString(readStringLiteral(STRING_DELIMITER_B));
+            case NAME_VALUE_SEPARATOR:
+            case CLOSE_OBJECT:
+            case CLOSE_ARRAY:
+            case PROPERTY_SEPARATOR:
+                throw new PSONException("Invalid name Character: " + c, currentLine);
         }
         
+        StringBuilder sb = new StringBuilder(16);
+        sb.append(c);
+        for(c = read();; c = read())
+        {
+            switch(c)
+            {
+                case ' ':
+                case '\t':
+                case EOL:
+                case EOF:
+                case CLOSE_OBJECT:
+                case CLOSE_ARRAY:
+                case PROPERTY_SEPARATOR:
+                    return decodeValue(sb.toString());
+                case OPEN_OBJECT:
+                case STRING_DELIMITER_A:
+                case STRING_DELIMITER_B:
+                case NAME_VALUE_SEPARATOR:
+                    throw new PSONException("Invalid name Character: " + c, currentLine);
+                default: sb.append(c); break;
+            }
+        }
     }
     
-    private PSObject readObject(char endChar) throws IOException, PSONException
+    private static PSValue decodeValue(String text)
     {
-        ProtoObject object = new ProtoObject();
+        switch(text)
+        {
+            case "undefined": return PSValue.UNDEFINED;
+            case "null": return PSValue.NULL;
+            case "true": return PSValue.TRUE;
+            case "false": return PSValue.FALSE;
+            case "-1": return PSValue.MINUSONE;
+            case "0": return PSValue.ZERO;
+            case "1": return PSValue.ONE;
+            case "NaN": return Literal.NAN.getValue();
+            case "Infinity": return Literal.INFINITY.getValue();
+            case "-Infinity": return Literal.NEGATIVE_INFINITY.getValue();
+        }
+        
+        try { return new PSLong(Long.decode(text)); } catch(NumberFormatException ex) {}
+        try { return new PSDouble(Double.parseDouble(text)); } catch(NumberFormatException ex) {}
+        
+        return new PSString(text);
+    }
+    
+    private PSArray readArray() throws IOException, PSONException
+    {
+        ArrayList<PSValue> array = new ArrayList<>(8);
         for(;;)
         {
-            String name = readPropertyName();
-            seek(NAME_VALUE_SEPARATOR);
+            PSValue value = readPropertyValue();
+            array.add(value);
+            char end = seek(true, PROPERTY_SEPARATOR, CLOSE_ARRAY);
+            if(end == CLOSE_ARRAY)
+                return new PSArray(array);
+        }
+    }
+    
+    private PSObject readObject(char endChar, boolean useLastChar) throws IOException, PSONException
+    {
+        ProtoObject object = new ProtoObject();
+        int count = 0;
+        for(;;)
+        {
+            String name = readPropertyName(count++ == 0 && useLastChar);
+            seek(true, NAME_VALUE_SEPARATOR);
             PSValue value = readPropertyValue();
             object.put(name, value);
-            char end = seek(PROPERTY_SEPARATOR, endChar);
+            char end = seek(true, PROPERTY_SEPARATOR, endChar);
             if(end == endChar)
                 return object.build(false);
         }
     }
     
-    public final PSObject readObject() throws IOException, PSONException { return readObject(EOF); }
+    public final PSObject readObject() throws IOException, PSONException
+    {
+        char first = readIgnoreSpaces();
+        return first == OPEN_OBJECT
+                ? readObject(CLOSE_OBJECT, false)
+                : readObject(EOF, true);
+    }
 
     @Override
-    public final void close() throws Exception
+    public final void close() throws IOException
     {
         source.close();
     }
