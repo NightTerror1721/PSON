@@ -13,7 +13,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.io.Writer;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import nt.ps.lang.PSObject;
+import nt.ps.lang.PSObject.PropertyEntry;
 
 /**
  *
@@ -88,5 +91,47 @@ public final class PSON
     public static final <T extends PSONUserdataReader> T read(Class<T> objectClass, InputStream input) throws IllegalStateException, IOException, PSONException
     {
         return read(objectClass, input, DEFAULT_BUFFER_LENGTH);
+    }
+    
+    
+    
+    public static final void write(PSONUserdataWriter object, boolean wrapped, OutputStream output, int bufferLength) throws IOException
+    {
+        PSONWriter w = new PSONWriter(output, bufferLength);
+        w.writeUserdata(object, wrapped);
+        w.flush();
+    }
+    public static final void write(PSONUserdataWriter object, boolean wrapped, OutputStream output) throws IOException { write(object, wrapped, output, DEFAULT_BUFFER_LENGTH); }
+    
+    public static final void write(PSONUserdataWriter object, boolean wrapped, Writer writer, int bufferLength) throws IOException
+    {
+        PSONWriter w = new PSONWriter(writer, bufferLength);
+        w.writeUserdata(object, wrapped);
+        w.flush();
+    }
+    public static final void write(PSONUserdataWriter object, boolean wrapped, Writer writer) throws IOException { write(object, wrapped, writer, DEFAULT_BUFFER_LENGTH); }
+    
+    
+    public static final <T extends PSONUserdataReader> T read(T object, PSObject inputObject) throws IOException
+    {
+        for(PropertyEntry p : inputObject.properties())
+            object.readPSONProperty(p.getName(), p.getValue());
+        return object;
+    }
+    
+    public static final <T extends PSONUserdataReader> T read(Class<T> objectClass, PSObject inputObject)
+    {
+        try
+        {
+            Constructor<T> cns = objectClass.getDeclaredConstructor();
+            T instance = cns.newInstance();
+            return read(instance, inputObject);
+        }
+        catch(IOException | IllegalAccessException | IllegalArgumentException |
+                InstantiationException | NoSuchMethodException | SecurityException |
+                InvocationTargetException ex)
+        {
+            throw new IllegalStateException(ex);
+        }
     }
 }
