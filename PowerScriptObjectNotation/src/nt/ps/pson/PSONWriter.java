@@ -143,6 +143,39 @@ public final class PSONWriter implements AutoCloseable
             output.write(identation + "}");
     }
     
+    private void writeUserdataArray(String identation, PSONUserdataWriter[] objects) throws IOException
+    {
+        output.write("[");
+        int count = 0;
+        for(PSONUserdataWriter value : objects)
+        {
+            writeUserdata(identation, value, true);
+            if(++count < objects.length)
+                output.write(", ");
+        }
+        output.write("]");
+    }
+    
+    private void writeUserdataMap(String identation, Map<String, PSONUserdataWriter> map, boolean wrapped) throws IOException
+    {
+        String newIdentation;
+        if(wrapped)
+        {
+            newIdentation = identation + "    ";
+            output.write("{\n");
+        }
+        else newIdentation = identation;
+        int len = map.size(), count = 0;
+        for(Map.Entry<String, PSONUserdataWriter> e : map.entrySet())
+        {
+            output.write(newIdentation + propertyName(e.getKey()) + ": ");
+            writeUserdata(newIdentation, e.getValue(), true);
+            output.append(++count < len ? ",\n" : "\n");
+        }
+        if(wrapped)
+            output.write(identation + "}");
+    }
+    
     public final void writeUserdata(PSONUserdataWriter object, boolean wrapped) throws IOException { writeUserdata("", object, wrapped); }
     
     public final void flush() throws IOException
@@ -226,6 +259,22 @@ public final class PSONWriter implements AutoCloseable
                 output.write(",\n" + identation);
             output.write(propertyName(name) + ": ");
             writeUserdata(identation, userdata, true);
+        }
+        
+        public final void write(String name, PSONUserdataWriter... userdatas) throws IOException
+        {
+            if(count++ > 0)
+                output.write(",\n" + identation);
+            output.write(propertyName(name) + ": ");
+            writeUserdataArray(identation, userdatas);
+        }
+        
+        public final void writeUserdataMap(String name, Map<String, PSONUserdataWriter> userdataMap) throws IOException
+        {
+            if(count++ > 0)
+                output.write(",\n" + identation);
+            output.write(propertyName(name) + ": ");
+            PSONWriter.this.writeUserdataMap(identation, userdataMap, true);
         }
     }
 }
