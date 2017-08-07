@@ -190,6 +190,7 @@ public final class PSONWriter implements AutoCloseable
         public final void write(String name, Character value) throws IOException { write(name, PSValue.valueOf(value)); }
         
         public final void write(String name, String value) throws IOException { write(name, PSValue.valueOf(value)); }
+        public final void write(String name, Enum<?> value) throws IOException { write(name, PSValue.valueOf(value.ordinal())); }
         public final void write(String name, List<? extends PSValue> value) throws IOException { write(name, PSValue.valueOf(value)); }
         public final void write(String name, Map<PSValue, PSValue> value) throws IOException { write(name, PSValue.valueOf(value)); }
         
