@@ -93,6 +93,36 @@ public final class PSON
         return read(objectClass, input, DEFAULT_BUFFER_LENGTH);
     }
     
+    public static final <T extends PSONUserdataReader> T read(T object, Reader reader, int bufferLength) throws IOException, PSONException
+    {
+        return new PSONReader(reader, bufferLength).readUserdata(object);
+    }
+    public static final <T extends PSONUserdataReader> T read(T object, Reader reader) throws IOException, PSONException { return read(object, reader, DEFAULT_BUFFER_LENGTH); }
+    
+    public static final <T extends PSONUserdataReader> T read(Class<T> objectClass, Reader reader, int bufferLength) throws IllegalStateException, IOException, PSONException
+    {
+        return new PSONReader(reader, bufferLength).readUserdata(objectClass);
+    }
+    public static final <T extends PSONUserdataReader> T read(Class<T> objectClass, Reader reader) throws IllegalStateException, IOException, PSONException
+    {
+        return read(objectClass, reader, DEFAULT_BUFFER_LENGTH);
+    }
+    
+    public static final <T extends PSONUserdataReader> T read(T object, File file, int bufferLength) throws IOException, PSONException
+    {
+        try(FileInputStream fis = new FileInputStream(file)) { return read(object, fis, bufferLength); }
+    }
+    public static final <T extends PSONUserdataReader> T read(T object, File file) throws IOException, PSONException { return read(object, file, DEFAULT_BUFFER_LENGTH); }
+    
+    public static final <T extends PSONUserdataReader> T read(Class<T> objectClass, File file, int bufferLength) throws IllegalStateException, IOException, PSONException
+    {
+        try(FileInputStream fis = new FileInputStream(file)) { return read(objectClass, fis, bufferLength); }
+    }
+    public static final <T extends PSONUserdataReader> T read(Class<T> objectClass, File file) throws IllegalStateException, IOException, PSONException
+    {
+        return read(objectClass, file, DEFAULT_BUFFER_LENGTH);
+    }
+    
     
     
     public static final void write(PSONUserdataWriter object, boolean wrapped, OutputStream output, int bufferLength) throws IOException
@@ -110,6 +140,13 @@ public final class PSON
         w.flush();
     }
     public static final void write(PSONUserdataWriter object, boolean wrapped, Writer writer) throws IOException { write(object, wrapped, writer, DEFAULT_BUFFER_LENGTH); }
+    
+    public static final void write(PSONUserdataWriter object, boolean wrapped, File file, int bufferLength) throws IOException
+    {
+        try(FileOutputStream fos = new FileOutputStream(file)) { write(object, wrapped, fos, bufferLength); }
+    }
+    public static final void write(PSONUserdataWriter object, boolean wrapped, File file) throws IOException { write(object, wrapped, file, DEFAULT_BUFFER_LENGTH); }
+    
     
     
     public static final <T extends PSONUserdataReader> T read(T object, PSObject inputObject) throws IOException
