@@ -13,7 +13,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Objects;
-import nt.ps.compiler.LangUtils.ProtoObject;
+import nt.ps.lang.LangUtils.ProtoObject;
 import nt.ps.compiler.parser.Literal;
 import nt.ps.lang.PSArray;
 import nt.ps.lang.PSNumber.PSDouble;
@@ -162,13 +162,16 @@ public final class PSONReader implements AutoCloseable
         throw new PSONException("Unexpected End of File", currentLine);
     }
     
-    private String readPropertyName(boolean useLastChar) throws IOException, PSONException
+    private String readPropertyName(boolean useLastChar, boolean first) throws IOException, PSONException
     {
         int currentLine = line;
         char c = useLastChar ? lastChar : readIgnoreSpaces();
         switch(c)
         {
-            case EOF: throw new PSONException("Unexpected End of File", currentLine);
+            case EOF:
+                if(first)
+                    return null;
+                throw new PSONException("Unexpected End of File", currentLine);
             case STRING_DELIMITER_A: {
                 String name = readStringLiteral(STRING_DELIMITER_A); 
                 //seek(NAME_VALUE_SEPARATOR);
@@ -179,12 +182,15 @@ public final class PSONReader implements AutoCloseable
                 //seek(NAME_VALUE_SEPARATOR);
                 return name;
             }
+            case CLOSE_OBJECT:
+                if(first)
+                    return null;
             case NAME_VALUE_SEPARATOR:
             case OPEN_OBJECT:
-            case CLOSE_OBJECT:
             case OPEN_ARRAY:
             case CLOSE_ARRAY:
             case PROPERTY_SEPARATOR:
+                throw new PSONException("Invalid name Character: " + c, currentLine);
             default: {
                 StringBuilder sb = new StringBuilder(16);
                 sb.append(c);
@@ -212,7 +218,7 @@ public final class PSONReader implements AutoCloseable
         }
     }
     
-    private PSValue readPropertyValue() throws IOException, PSONException
+    private PSValue readPropertyValue(boolean first) throws IOException, PSONException
     {
         int currentLine = line;
         char c = readIgnoreSpaces();
@@ -222,9 +228,11 @@ public final class PSONReader implements AutoCloseable
             case OPEN_ARRAY: return readArray();
             case STRING_DELIMITER_A: return new PSString(readStringLiteral(STRING_DELIMITER_A));
             case STRING_DELIMITER_B: return new PSString(readStringLiteral(STRING_DELIMITER_B));
+            case CLOSE_ARRAY:
+                if(first)
+                    return null;
             case NAME_VALUE_SEPARATOR:
             case CLOSE_OBJECT:
-            case CLOSE_ARRAY:
             case PROPERTY_SEPARATOR:
                 throw new PSONException("Invalid name Character: " + c, currentLine);
         }
@@ -277,10 +285,19 @@ public final class PSONReader implements AutoCloseable
     
     private PSArray readArray() throws IOException, PSONException
     {
+        boolean first = true;
         ArrayList<PSValue> array = new ArrayList<>(8);
         for(;;)
         {
-            PSValue value = readPropertyValue();
+            PSValue value = readPropertyValue(first);
+            if(value == null)
+            {
+                if(first)
+                    return new PSArray();
+                throw new IllegalStateException();
+            }
+            if(first)
+                first = false;
             array.add(value);
             char end = seek(true, PROPERTY_SEPARATOR, CLOSE_ARRAY);
             if(end == CLOSE_ARRAY)
@@ -294,9 +311,16 @@ public final class PSONReader implements AutoCloseable
         int count = 0;
         for(;;)
         {
-            String name = readPropertyName(count++ == 0 && useLastChar);
+            boolean first = count++ == 0;
+            String name = readPropertyName(first && useLastChar, first);
+            if(name == null)
+            {
+                if(first)
+                    return object.build(false);
+                throw new IllegalStateException();
+            }
             seek(true, NAME_VALUE_SEPARATOR);
-            PSValue value = readPropertyValue();
+            PSValue value = readPropertyValue(false);
             object.put(name, value);
             char end = seek(true, PROPERTY_SEPARATOR, endChar);
             if(end == endChar)
@@ -319,9 +343,16 @@ public final class PSONReader implements AutoCloseable
         int count = 0;
         for(;;)
         {
-            String name = readPropertyName(count++ == 0 && useLastChar);
+            boolean first = count++ == 0;
+            String name = readPropertyName(first && useLastChar, first);
+            if(name == null)
+            {
+                if(first)
+                    return object;
+                throw new IllegalStateException();
+            }
             seek(true, NAME_VALUE_SEPARATOR);
-            PSValue value = readPropertyValue();
+            PSValue value = readPropertyValue(false);
             object.readPSONProperty(name, value);
             char end = seek(true, PROPERTY_SEPARATOR, endChar);
             if(end == endChar)
